@@ -7,7 +7,7 @@ This version of Giswater is provided by Giswater Association
 --FUNCTION CODE: 3007
 
 
-CREATE OR REPLACE FUNCTION ud_sample.gw_fct_anl_drainedflows()
+CREATE OR REPLACE FUNCTION ud_sample.gw_fct_anl_drained_flows()
   RETURNS void AS
   
 $BODY$

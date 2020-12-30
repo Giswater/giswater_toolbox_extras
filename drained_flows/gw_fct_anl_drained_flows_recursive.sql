@@ -6,7 +6,7 @@ This version of Giswater is provided by Giswater Association
 
 --FUNCTION CODE: 3009
 
-CREATE OR REPLACE FUNCTION ud_sample.gw_fct_anl_drainedflows_recursive( p_node character varying, p_nrow integer, p_intensity double precision)
+CREATE OR REPLACE FUNCTION ud_sample.gw_fct_anl_drained_flows_recursive( p_node character varying, p_nrow integer, p_intensity double precision)
   RETURNS double precision AS
   
 $BODY$
