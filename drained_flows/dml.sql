@@ -5,6 +5,9 @@ This version of Giswater is provided by Giswater Association
 */
 
 
+SET search_path = 'ud_sample', public;
+
+
 INSERT INTO sys_function(id, function_name, project_type, function_type, input_params, return_type, descript, sys_role, source)
 VALUES (3007,'anl_drained_flows', 'ud', 'function', '???', '???', 'Function to analyze drained flows', 'role_epa', 'toolbox extras drained_flows') 
 ON CONFLICT (function_name, project_type) DO NOTHING;
