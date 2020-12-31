@@ -4,113 +4,80 @@ The program is free software: you can redistribute it and/or modify it under the
 This version of Giswater is provided by Giswater Association
 */
 
---FUNCTION CODE: 3007
+--FUNCTION CODE: 3010
 
 
-CREATE OR REPLACE FUNCTION ud_sample.gw_fct_anl_drained_flows()
+CREATE OR REPLACE FUNCTION ud_sample.gw_fct_anl_drained_flows(p_intensity)
   RETURNS void AS
-  
+
 $BODY$
 
+/*
+
+INSTRUCTIONS
+------------
+Before to execute this function anl_drained tables must be filled at least with:
+arc table: arc_id, max_flow, isflowreg
+node table: node_id, node_area, imperv, hasflowreg, flowreg_initflow
+
+The propagation of drained parameters has two special characteristics:
+
+1) Drainage parameters distribution on nodes whith more than one outlet conduit
+
+	- If max_flow of all outlet conduits is provided (wet conduits)
+		- If node has flowregulator
+			- flowreg_initflow in combination with mannings capacity weightweing
+		
+		- Else
+			- Mannings capacity weightweing
+		
+	- Else (If there is some conduit without max_flow):
+		- For non-wet conduits -> Linear distribution (wet conduits / total conduits)
+		- For wet conduits, mannings capacity weightweing
+
+
+2) Flow limitation in terms of arc maximun mannings capacity
+	- Real flow is maximun againts (conduit max flow and flow provided for the upstream node)
+
+*/
+
+
 DECLARE
-node_id_var varchar(16);
-arc_id_var varchar(16);
-index_point integer;
-point_aux geometry;
-num_row integer = 0;
-flow_node double precision;
-total_capacity double precision;
-arc_capacity double precision;
-rec_table record;
-num_pipes integer;
-num_wet_pipes integer;
+v_node_id varchar(16);
+v_row integer = 0;
+v_num_outlet integer= 0;
+v_num_wet_outlet integer= 0;
 
 BEGIN
 
 	-- search path
 	SET search_path = "ud_sample", public;
-
---	Create table for arc results
-	DROP TABLE IF EXISTS anl_drainedflows_arc CASCADE;
-	CREATE TABLE anl_drainedflows_arc
-	(
-		arc_id character varying(16) NOT NULL,
-		area -- area en m2 del conducte
-		wetper -- perimetre mullat del coducte
-		slope -- pendent del conducte
-		maxflow numeric(12,4) DEFAULT 0.00, -- cabal que pot suportar canonada segons manning a secció plena (a partir de valors anteriors)
-		isflowreg boolean DEFAULT false, -- es regulador de fluxe, es una variable que va de la ma del camp hasflowreg de la taula runoff_node_flow
-
-		flow numeric(12,4) DEFAULT 0.00, -- cabal real traspassat
-		CONSTRAINT runoff_arc_flow_pkey PRIMARY KEY (arc_id),
-		CONSTRAINT runoff_arc_flow_arc_id_fkey FOREIGN KEY (arc_id)
-			REFERENCES arc (arc_id) MATCH SIMPLE
-			ON UPDATE CASCADE ON DELETE CASCADE
-	)
-	WITH (
-		OIDS=FALSE
-	);
 	
---	Create the temporal table for computing
-	DROP TABLE IF EXISTS anl_drainedflows_node CASCADE;
-	CREATE TEMP TABLE anl_drainedflows_node
-	(		
-		node_id character varying(16) NOT NULL,
-		nodearea double precision  DEFAULT 0
-		imperv double precision  DEFAULT 0
-		intensity double precision  DEFAULT 0
-		wwflow double precision  DEFAULT 0
-		inhabitants integer  DEFAULT 0
-		dph double precision  DEFAULT 0
-		dwflow double precision  DEFAULT 0
-		totalflow numeric(12,4) DEFAULT 0.00, -- cabal generat en el node
-		hasflowreg boolean DEFAULT false, -- el node disposa de reguladors de fluxe: Si és true, els reguladors de fluxe han de ser tants com noutlet menys 1 i cal identificarlos runoff_arc_flow -> condició de càlcul, es així
-		flowreqinit double precision, -- llindar a partir del qual el(s) regulador(s) de fluxe entra en joc
+	
+	--	Filling anl_drained_flows_node table
+	FOR v_node_id IN SELECT node_id FROM node
+	LOOP
+
+		-- Count number of pipes draining the node
+		SELECT count(*) INTO v_num_outlet FROM arc WHERE node_1 = v_node_id;
+
+		-- Count number of wet pipes draining the node
+		SELECT count(*) INTO v_num_wet_outlet FROM arc WHERE node_1 = v_node_id AND flow > 0.0;
+
+		-- Compute total capacity of the pipes exiting from the node
+		SELECT sum(flow) INTO v_max_discharge_capacity FROM arc WHERE node_1 = v_node_id;
 		
-		capacityflow numeric(12,4) DEFAULT 0.00, -- capacitat maxima de desguas de node, sumant les capacitats de cada un dels arcs que desguassan
-		noutlet integer DEFAULT 0,  -- num total de trams sortida
-		nwetoutlet integer DEFAULT 0, -- num total de trams mullables (tenen cabal assignat)
-		ftrack_id integer DEFAULT 0, -- flag
-		CONSTRAINT runoff_node_flow_pkey PRIMARY KEY (node_id)
-	);
-
-
---	Copy nodes into new area table
-	FOR node_id_var IN SELECT node_id FROM node
-	LOOP
-
---		Count number of pipes draining the node
-		SELECT count(*) INTO num_pipes FROM arc WHERE node_1 = node_id_var;
-
---		Count number of pipes draining the node
-		SELECT count(*) INTO num_wet_pipes FROM arc WHERE node_1 = node_id_var AND flow > 0.0;
-
---		Compute total capacity of the pipes exiting from the node
-		SELECT sum(flow) INTO total_capacity FROM arc WHERE node_1 = node_id_var;
-
---		Compute total capacity of the pipes exiting from the node
-		SELECT sum(flow) INTO total_capacity FROM arc WHERE node_1 = node_id_var;
-		INSERT INTO runoff_node_flow VALUES(node_id_var, 0.0, 0, total_capacity, num_pipes, num_wet_pipes);
+		INSERT INTO anl_drained_flows_node VALUES(node_id_var, 0.0, 0, v_max_discharge_capacity, v_num_outlet, v_num_wet_outlet);
 
 	END LOOP;
-
---	Copy arcs into new area table
-	FOR arc_id_var IN SELECT arc_id FROM arc
+	
+	--	Compute the tributary area using DFS
+	FOR v_node_id IN SELECT node_id FROM anl_drained_flows_node
 	LOOP
+		v_row = v_row + 1;
 
---		Insert into nodes area table
-		INSERT INTO runoff_arc_flow VALUES(arc_id_var, 0.0);
-
-	END LOOP;
-
-
---	Compute the tributary area using DFS
-	FOR node_id_var IN SELECT node_id FROM runoff_node_flow
-	LOOP
-		num_row = num_row + 1;
-
---		Call function
-		flow_node := gw_fct_anl_hydraulics_recursive(node_id_var, num_row, intensity);
+		-- Call function
+		PERFORM gw_fct_anl_drained_flows_recursive(v_node_id, v_row, p_intensity);
 
 	END LOOP;
 		

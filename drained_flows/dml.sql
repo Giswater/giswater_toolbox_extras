@@ -8,11 +8,18 @@ This version of Giswater is provided by Giswater Association
 SET search_path = 'ud_sample', public;
 
 
+-- fprocess
+INSERT INTO sys_fprocess VALUES (367, 'Drained flows' 'ud', NULL, 'anl_drained_flows toolbox extra tools');
+
+-- functions
 INSERT INTO sys_function(id, function_name, project_type, function_type, input_params, return_type, descript, sys_role, source)
-VALUES (3007,'anl_drained_flows', 'ud', 'function', '???', '???', 'Function to analyze drained flows', 'role_epa', 'toolbox extras drained_flows') 
+VALUES (3010,'anl_drained_flows', 'ud', 'function', '???', '???', 'Function to analyze drained flows', 'role_epa', 'anl_drained_flows toolbox extra tools') 
 ON CONFLICT (function_name, project_type) DO NOTHING;
 
-
 INSERT INTO sys_function(id, function_name, project_type, function_type, input_params, return_type, descript, sys_role, source)
-VALUES (3009,'anl_drained_flows_recursive', 'ud', 'function', '???', '???', 'Auxiliar function to analyze drained flows', 'role_epa', 'toolbox extras drained_flows') 
+VALUES (3012,'anl_drained_flows_recursive', 'ud', 'function', '???', '???', 'Auxiliar function to analyze drained flows', 'role_epa', 'anl_drained_flows toolbox extra tools') 
 ON CONFLICT (function_name, project_type) DO NOTHING;
+
+-- TO DO
+--INSERT INTO sys_table (anl_drained_flows_arc);
+--INSERT INTO sys_table (anl_drained_flows_node);
