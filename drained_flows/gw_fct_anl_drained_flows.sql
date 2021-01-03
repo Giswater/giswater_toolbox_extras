@@ -15,8 +15,10 @@ $BODY$
 /*
 EXAMPLE
 -------
-intensity expressed in mm/h
-SELECT SCHEMA_NAME.gw_fct_anl_drained_flows($${"data":{"parameters":{"resultId":"test1", "intensity":100}}}$$) 
+SELECT SCHEMA_NAME.gw_fct_anl_drained_flows($${"data":{"parameters":{"resultId":"test1", "intensity":100, "returnArcLayer":false,}}}$$) 
+resultId: Id to store as many results as you like on anl_arc & anl_node tables (fid = 367)
+intensity: expressed in mm/h
+returnArcLayer: To add temporal table on ToC to visualize results of algorithm
 
 -- fid: 367
 
@@ -150,6 +152,7 @@ v_count integer = 0;
 v_result text;
 v_result_info json;
 v_result_line json;
+v_returnarc boolean = false;
 
 BEGIN
 
@@ -162,6 +165,8 @@ BEGIN
 	-- get input values
 	v_intensity := ((p_data ->>'data')::json->>'parameters')::json->>'intensity';
 	v_result_id:= ((p_data ->>'data')::json->>'parameters')::json->>'resultId';
+	v_returnarc:= ((p_data ->>'data')::json->>'parameters')::json->>'returnArcLayer';
+
 
 	-- reset storage tables
 	DELETE FROM anl_arc WHERE result_id = v_result AND fid = v_fid;
@@ -286,22 +291,23 @@ BEGIN
 	v_result_info = concat ('{"geometryType":"", "values":',v_result, '}');
 
 	--lines
-	v_result = null;
-	SELECT json_agg(features.feature) INTO v_result
-	FROM (
-  	SELECT json_build_object(
-     'type',       'Feature',
-    'geometry',   ST_AsGeoJSON(the_geom)::json,
-    'properties', to_json(row)
-  	) AS feature
-  	FROM (SELECT arc_id, arccat_id, result_id, descript, the_geom
-  	FROM  anl_arc WHERE result_id=v_result_id AND fid=v_fid) row) features;
+	IF v_returnarc THEN
+		v_result = null;
+		SELECT json_agg(features.feature) INTO v_result
+		FROM (
+		SELECT json_build_object(
+		 'type',       'Feature',
+		'geometry',   ST_AsGeoJSON(the_geom)::json,
+		'properties', to_json(row)
+		) AS feature
+		FROM (SELECT arc_id, arccat_id, result_id, descript, the_geom
+		FROM  anl_arc WHERE result_id=v_result_id AND fid=v_fid) row) features;
+		v_result_line = concat ('{"geometryType":"LineString", "features":',v_result,'}'); 
 
-
-	v_result := COALESCE(v_result, '{}'); 
-	v_result_line = concat ('{"geometryType":"LineString", "features":',v_result,'}'); 
+	END IF;
 
 	-- Control nulls
+	v_result := COALESCE(v_result, '{}'); 
 	v_result_info := COALESCE(v_result_info, '{}'); 
 	v_result_line := COALESCE(v_result_line, '{}'); 
 	

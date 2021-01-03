@@ -23,7 +23,8 @@ ON CONFLICT (function_name, project_type) DO NOTHING;
 
 INSERT INTO config_toolbox 
 VALUES (3014, 'Drained flows', TRUE, '{"featureType":[]}', '[{"widgetname":"intensity", "label":"Rainfall intensity:", "widgettype":"text", "datatype":"numeric","layoutname":"grl_option_parameters","layoutorder":1,"value":""},
-							     {"widgetname":"resultId", "label":"Result name:", "widgettype":"text", "datatype":"text", "layoutname":"grl_option_parameters", "layoutorder":2,"value":""}]', null, true)
+							     {"widgetname":"resultId", "label":"Result name:", "widgettype":"text", "datatype":"text", "layoutname":"grl_option_parameters", "layoutorder":2,"value":""},
+								 {"widgetname":"returnArcLayer", "label":"Add temp layer on ToC:", "widgettype":"check", "datatype":"boolean", "layoutname":"grl_option_parameters", "layoutorder":3,"value":"false"}]', null, true)
 
 ON CONFLICT (id) DO NOTHING;
 
