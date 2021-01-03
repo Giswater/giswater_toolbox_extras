@@ -5,21 +5,31 @@ This version of Giswater is provided by Giswater Association
 */
 
 
-SET search_path = 'ud_sample', public;
+SET search_path = 'SCHEMA_NAME', public;
 
 
 -- fprocess
-INSERT INTO sys_fprocess VALUES (367, 'Drained flows' 'ud', NULL, 'anl_drained_flows toolbox extra tools');
+INSERT INTO sys_fprocess VALUES (367, 'Drained flows', 'ud', NULL, 'anl_drained_flows toolbox extra tools')
+ON CONFLICT (fid) DO NOTHING;
 
 -- functions
 INSERT INTO sys_function(id, function_name, project_type, function_type, input_params, return_type, descript, sys_role, source)
-VALUES (3010,'anl_drained_flows', 'ud', 'function', '???', '???', 'Function to analyze drained flows', 'role_epa', 'anl_drained_flows toolbox extra tools') 
+VALUES (3014,'gw_fct_anl_drained_flows', 'ud', 'function', '???', '???', 'Function to analyze drained flows', 'role_epa', 'anl_drained_flows toolbox extra tools') 
 ON CONFLICT (function_name, project_type) DO NOTHING;
 
 INSERT INTO sys_function(id, function_name, project_type, function_type, input_params, return_type, descript, sys_role, source)
-VALUES (3012,'anl_drained_flows_recursive', 'ud', 'function', '???', '???', 'Auxiliar function to analyze drained flows', 'role_epa', 'anl_drained_flows toolbox extra tools') 
+VALUES (3015,'gw_fct_anl_drained_flows_recursive', 'ud', 'function', '???', '???', 'Auxiliar function to analyze drained flows', 'role_epa', 'anl_drained_flows toolbox extra tools') 
 ON CONFLICT (function_name, project_type) DO NOTHING;
+
+INSERT INTO config_toolbox 
+VALUES (3014, 'Drained flows', TRUE, '{"featureType":[]}', '[{"widgetname":"intensity", "label":"Rainfall intensity:", "widgettype":"text", "datatype":"numeric","layoutname":"grl_option_parameters","layoutorder":1,"value":""},
+							     {"widgetname":"resultId", "label":"Result name:", "widgettype":"text", "datatype":"text", "layoutname":"grl_option_parameters", "layoutorder":2,"value":""}]', null, true)
+
+ON CONFLICT (id) DO NOTHING;
+
 
 -- TO DO
 --INSERT INTO sys_table (anl_drained_flows_arc);
 --INSERT INTO sys_table (anl_drained_flows_node);
+--INSERT INTO sys_table (v_anl_drained_flows_arc);
+--INSERT INTO sys_table (v_anl_drained_flows_node);

@@ -4,48 +4,60 @@ The program is free software: you can redistribute it and/or modify it under the
 This version of Giswater is provided by Giswater Association
 */
 
+SET search_path = "SCHEMA_NAME", public;
 
+DROP TABLE IF EXISTS anl_drained_flows_arc CASCADE;
 CREATE TABLE anl_drained_flows_arc
 (
+	-- user columns
 	arc_id character varying(16) NOT NULL,
-	area double precision  DEFAULT 0.00,-- area en m2 del conducte
-	wetper double precision  DEFAULT 0.00,-- perimetre mullat del coducte
-	slope double precision  DEFAULT 0.00,-- pendent del conducte
-	max_flow numeric(12,4) DEFAULT 0.00, -- cabal que pot suportar canonada segons manning a secció plena (a partir de valors anteriors)
-	flowreg boolean DEFAULT false, -- es regulador de fluxe, es una variable que va de la ma del camp hasflowreg de la taula runoff_node_flow
+	arccat_id character varying(30) NOT NULL,
+	epa_shape character varying(30) NOT NULL, -- catalog of epa's swmm shapes
+	geom1 double precision  DEFAULT 0.00,-- according epa swmmm user's manual
+	geom2 double precision  DEFAULT 0.00,-- according epa swmmm user's manual
+	geom3 double precision  DEFAULT 0.00,-- according epa swmmm user's manual
+	geom4 double precision  DEFAULT 0.00,-- according epa swmmm user's manual
+	area double precision  DEFAULT 0.00,-- conduit's crossection area (m2)
+	manning double precision  DEFAULT 0.00,-- manning's number for mannings formula
+	full_rh double precision  DEFAULT 0.00,-- hydraulic radius at full flow for conduit crossection (m)
+	slope double precision  DEFAULT 0.00,-- conduit's slope (m/m)
+	full_flow numeric(12,4) DEFAULT 0.00, -- max flow for conduit according manning's formula at full capacity
+	isflowreg boolean DEFAULT false, -- conduit is flow regulator: Need to be informed in combination with hasflowreg from runoff_node_flow table
 
-	drained_area  double precision  DEFAULT  0.00, -- area total drenada pel arc, sense tenir en compte el coeficient de runoff
-	runoff_area  double precision  DEFAULT  0.00, -- area efectiva drenada pel arc, aplicant el coefficient de runoff
-	runoff_flow double precision  DEFAULT  0.00, -- cabal drenat teoric corresponent al cabal efectiu, en cas que no hi hagues limitacions de xarxa
-	real_flow numeric(12,4) DEFAULT 0.00, -- cabal drenat real per culpa de les limitacions de xarxa
+	-- algorithm columns
+	drained_area numeric(12,4)  DEFAULT  0.00, -- drained area total, without runoff coefficient
+	runoff_area numeric(12,4)  DEFAULT  0.00, -- efective drained area, applying runoff coefficient for each upstream subcatchment
+	runoff_flow numeric(12,4)  DEFAULT  0.00, -- efective flow without upstream network limitations using runoff area values
+	real_flow numeric(12,4) DEFAULT 0.00, -- real flow according upstream network limitations
 	CONSTRAINT anl_drainedf_lows_arc_pkey PRIMARY KEY (arc_id),
 	CONSTRAINT anl_drained_flows_arc_fkey FOREIGN KEY (arc_id)
 		REFERENCES arc (arc_id) MATCH SIMPLE
 		ON UPDATE CASCADE ON DELETE CASCADE
-)
+);
 
 
+DROP TABLE IF EXISTS anl_drained_flows_node CASCADE;
 CREATE TABLE anl_drained_flows_node
 (		
+	-- user columns
 	node_id character varying(16) NOT NULL,
-	node_area double precision  DEFAULT 0.00,
-	imperv double precision  DEFAULT  0.00,
-	inhabitants integer  DEFAULT  0,
-	dph double precision  DEFAULT  0.00,
-	dw_flow double precision  DEFAULT  0.00,
-	hasflowreg boolean DEFAULT false, -- el node disposa de reguladors de fluxe: Si és true, els reguladors de fluxe han de ser tants com num outlet menys 1 i cal identificarlos runoff_arc_flow -> condició de càlcul, es així
-	flowreg_initflow double precision, -- llindar a partir del qual el(s) regulador(s) de fluxe entra en joc
-	
-	node_inflow numeric(12,4) DEFAULT 0.00, -- cabal generat en el node (sumatori de dph + node_area*imperv*intensity)
-	max_discharge_capacity numeric(12,4) DEFAULT 0.00, -- capacitat maxima de desguas de node, sumant les capacitats de cada un dels arcs que desguassan
-	num_outlet integer DEFAULT 0,  -- num total de trams sortida
-	num_wet_outlet integer DEFAULT 0, -- num total de trams mullables (tenen cabal assignat)
+	node_area double precision  DEFAULT 0.00, -- area drained on node (ha)
+	imperv double precision  DEFAULT  0.00, -- runoff coefficient for node area
+	dw_flow double precision  DEFAULT  0.00, -- dry wheater flows (m3/s)
+	hasflowreg boolean DEFAULT false, -- node has flow regulator: if true, regulator must be as num_outlet - 1 -> mandatory
+	flowreg_initflow double precision, -- init flow for flow regulator
+
+	-- algorithm columns
+	node_inflow double precision DEFAULT 0.00, -- inflow generated on node
+	max_discharge_capacity double precision DEFAULT 0.00, -- maximun discharge capacity, adding all downstream conduit's capacities
+	num_outlet integer DEFAULT 0,  -- number of downstream conduits
+	num_wet_outlet integer DEFAULT 0, -- number of downstream conduits with full_flow > 0
 	track_id integer DEFAULT 0, -- flag
 	
-	drained_area  double precision  DEFAULT  0.00, -- area total drenada pel node, sense tenir en compte el coeficient de runoff
-	runoff_area  double precision  DEFAULT  0.00, -- area efectiva drenada pel node, aplicant el coefficient de runoff
-	runoff_flow double precision  DEFAULT  0.00, -- cabal drenat teoric corresponent al cabal efectiu, en cas que no hi hagues limitacions de xarxa
-	real_flow numeric(12,4) DEFAULT 0.00, -- cabal drenat real per culpa de les limitacions de xarxa
+	drained_area numeric(12,4) DEFAULT  0.00,-- drained area total, without runoff coefficient
+	runoff_area numeric(12,4) DEFAULT  0.00, -- efective drained area, applying runoff coefficient for each upstream subcatchment
+	runoff_flow numeric(12,4) DEFAULT  0.00, -- efective flow without upstream network limitations using runoff area values
+	real_flow numeric(12,4) DEFAULT 0.00, --  real flow according upstream network limitations
 	
 	CONSTRAINT anl_drained_flows_node_pkey PRIMARY KEY (node_id)
 );
