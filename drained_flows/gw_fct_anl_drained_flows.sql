@@ -287,14 +287,14 @@ BEGIN
 
 	--lines
 	v_result = null;
-	SELECT jsonb_agg(features.feature) INTO v_result
+	SELECT json_agg(features.feature) INTO v_result
 	FROM (
-  	SELECT jsonb_build_object(
+  	SELECT json_build_object(
      'type',       'Feature',
-    'geometry',   ST_AsGeoJSON(the_geom)::jsonb,
-    'properties', to_jsonb(row) - 'the_geom'
+    'geometry',   ST_AsGeoJSON(the_geom)::json,
+    'properties', to_json(row)
   	) AS feature
-  	FROM (SELECT id, arc_id, arccat_id, descript, the_geom, fid, result_id
+  	FROM (SELECT arc_id, arccat_id, result_id, descript, the_geom
   	FROM  anl_arc WHERE result_id=v_result_id AND fid=v_fid) row) features;
 
 
