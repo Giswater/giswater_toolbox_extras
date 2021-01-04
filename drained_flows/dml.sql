@@ -25,12 +25,10 @@ INSERT INTO config_toolbox
 VALUES (3014, 'Drained flows', TRUE, '{"featureType":[]}', '[{"widgetname":"intensity", "label":"Rainfall intensity:", "widgettype":"text", "datatype":"numeric","layoutname":"grl_option_parameters","layoutorder":1,"value":""},
 							     {"widgetname":"resultId", "label":"Result name:", "widgettype":"text", "datatype":"text", "layoutname":"grl_option_parameters", "layoutorder":2,"value":""},
 								 {"widgetname":"returnArcLayer", "label":"Add temp layer on ToC:", "widgettype":"check", "datatype":"boolean", "layoutname":"grl_option_parameters", "layoutorder":3,"value":"false"}]', null, true)
-
 ON CONFLICT (id) DO NOTHING;
 
 
--- TO DO
---INSERT INTO sys_table (anl_drained_flows_arc);
---INSERT INTO sys_table (anl_drained_flows_node);
---INSERT INTO sys_table (v_anl_drained_flows_arc);
---INSERT INTO sys_table (v_anl_drained_flows_node);
+INSERT INTO sys_table (id, descript, sys_role) VALUES ('anl_drained_flows_arc', 'Table to work with drained flows extra tools', 'role_epa') ON CONFLICT (id) DO NOTHING;
+INSERT INTO sys_table (id, descript, sys_role) VALUES ('anl_drained_flows_node', 'Table to work with drained flows extra tools', 'role_epa') ON CONFLICT (id) DO NOTHING;
+INSERT INTO sys_table (id, descript, sys_role) VALUES ('v_anl_drained_flows_arc', 'View to work with drained flows extra tools', 'role_epa') ON CONFLICT (id) DO NOTHING;
+INSERT INTO sys_table (id, descript, sys_role) VALUES ('v_anl_drained_flows_node', 'View to work with drained flows extra toolss', 'role_epa') ON CONFLICT (id) DO NOTHING;
