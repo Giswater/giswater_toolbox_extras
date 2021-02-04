@@ -30,7 +30,7 @@ Algorithm works with two tables and specific columns:
 	- anl_drained_node table: node_id, node_area, imperv, dw_flow, hasflowreg, flowreg_initflow
 
 The propagation of drained parameters has two special characteristics:
-	1) Drainage parameters distribution on nodes whith more than one outlet conduit
+	1) NODE RULES: Drainage parameters distribution on nodes whith more than one outlet conduit
 
 	- If max_flow of all outlet conduits is provided (wet conduits)
 		- If node has flowregulator
@@ -44,13 +44,14 @@ The propagation of drained parameters has two special characteristics:
 		- For wet conduits, mannings capacity weightweing
 
 
-	2) Flow limitation in terms of arc maximun mannings capacity
+	2) ARC RULES: Flow limitation in terms of arc maximun mannings capacity
 	- Real flow is maximun againts (conduit max flow and flow provided for the upstream node)
 
 
 
 BEFOR START
 -----------
+SELECT * FROM anl_drained_flows_arc
 
 -- fill anl_drained_arc table
 -------------------------------
@@ -104,17 +105,18 @@ DELETE FROM anl_drained_flows_node;
 INSERT INTO anl_drained_flows_node (node_id, node_area, imperv, hasflowreg, flowreg_initflow)
 SELECT node_id, CASE WHEN area is null then 0 else area END, CASE WHEN imperv IS NULL THEN 0 ELSE imperv END, false,  0 FROM v_edit_node n
 	LEFT JOIN inp_subcatchment ON outlet_id = node_id;
--- check: SELECT * FROM anl_drained_flows_node;
+-- check: 
+SELECT * FROM anl_drained_flows_node;
 
 
 -- configure flow regulators
 ----------------------------
 -- node 237
-UPDATE anl_drained_flows_node SET hasflowreg = true, flowreg_initflow = 0.2 where node_id  = '237';
+UPDATE anl_drained_flows_node SET hasflowreg = true, flowreg_initflow = 0.25 where node_id  = '237';
 UPDATE anl_drained_flows_arc SET isflowreg  = true WHERE arc_id  = '300';
 
 -- node 238
-UPDATE anl_drained_flows_node SET hasflowreg = true, flowreg_initflow = 0.25 where node_id  = '238';
+UPDATE anl_drained_flows_node SET hasflowreg = true, flowreg_initflow = 0.2 where node_id  = '238';
 UPDATE anl_drained_flows_arc SET isflowreg  = true WHERE arc_id  = '342';
 
 
