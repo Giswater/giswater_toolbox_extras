@@ -62,16 +62,25 @@ SELECT arc_id, arccat_id, shape, geom1, geom2, geom3, geom4, area, n, slope, fal
 	LEFT JOIN cat_arc_shape s ON shape=s.id 
 	LEFT JOIN cat_mat_arc m ON a.matcat_id = m.id;
 -- check:
-SELECT * FROM anl_drained_flows_arc order by 1;
+SELECT * FROM anl_drained_flows_arc WHERE epa_shape  ='RECTANGULAR';
 
 
 -- update anl_drained_arc, full_rh values
 -----------------------------------------
+UPDATE anl_drained_flows_arc d SET area = (geom1/2)*(geom1/2)*pi() WHERE epa_shape = 'CIRCULAR'; -- {{hr =0.5*(geom1/2)}}
 UPDATE anl_drained_flows_arc d SET full_rh = 0.5*geom1/2 WHERE epa_shape = 'CIRCULAR'; -- {{hr =0.5*(geom1/2)}}
-UPDATE anl_drained_flows_arc d SET full_rh = geom1*geom2/(geom1*2 + geom2*2) WHERE epa_shape = 'RECT_CLOSED';  --{{hr = geom1*geom2/(geom1*2+geom*2}}
-UPDATE anl_drained_flows_arc d SET full_rh = 0.579*(geom1/3) WHERE epa_shape = 'EGG'; -- 
--- check: SELECT * FROM anl_drained_flows_arc;
 
+SELECT DISTINCT (shape) FROM cat_arc JOIN arc ON arccat_id = id WHERE sector_id =28
+
+UPDATE anl_drained_flows_arc d SET area = geom1*geom2 WHERE epa_shape IN ('RECT_OBERT' , 'RECTANGULAR', 'MODBASKETHANDLE'); -- {{area = geom1*geom2}}
+UPDATE anl_drained_flows_arc d SET full_rh = geom1*geom2/(geom1*2 + geom2*2) WHERE epa_shape IN ('RECT_OBERT' , 'RECTANGULAR', 'MODBASKETHANDLE');  --{{hr = geom1*geom2/(geom1*2+geom*2}}
+
+UPDATE anl_drained_flows_arc d SET area = 4.594*((geom1/3)*(geom1/3)) WHERE epa_shape = 'OVOIDE'; -- 
+UPDATE anl_drained_flows_arc d SET full_rh = 0.579*(geom1/3) WHERE epa_shape = 'OVOIDE'; -- 
+-- check: 
+SELECT * FROM anl_drained_flows_arc;
+
+UPDATE anl_drained_flows_arc set area=0, full_rh=0 where arccat_id  like'NC%'
 
 -- update anl_drained_arc, full_flow values for conduits according manning's formula
 ------------------------------------------------------------------------------------
@@ -103,8 +112,9 @@ UPDATE anl_drained_flows_arc f SET full_flow = a.full_flow FROM (
 --------------------------------
 DELETE FROM anl_drained_flows_node;
 INSERT INTO anl_drained_flows_node (node_id, node_area, imperv, hasflowreg, flowreg_initflow)
-SELECT node_id, CASE WHEN area is null then 0 else area END, CASE WHEN imperv IS NULL THEN 0 ELSE imperv END, false,  0 FROM v_edit_node n
-	LEFT JOIN inp_subcatchment ON outlet_id = node_id;
+SELECT node_id, CASE WHEN sum(area) is null then 0 else sum(area) END, CASE WHEN sum(area*imperv)/sum(imperv) IS NULL THEN 0 ELSE sum(area*imperv)/sum(imperv) END, false,  0 FROM v_edit_node n
+	LEFT JOIN v_edit_inp_subcatchment ON outlet_id = node_id
+	GROUP BY node_id;
 -- check: 
 SELECT * FROM anl_drained_flows_node;
 
