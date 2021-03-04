@@ -29,11 +29,14 @@ CREATE TABLE anl_drained_flows_arc
 	runoff_area numeric(12,4)  DEFAULT  0.00, -- efective drained area, applying runoff coefficient for each upstream subcatchment
 	runoff_flow numeric(12,4)  DEFAULT  0.00, -- Total flow without upstream network limitations using runoff area values (effective areas)
 	real_flow numeric(12,4) DEFAULT 0.00, -- real flow according upstream network limitations
+	geom1_mod numeric(12,3) DEFAULT 0.00, -- geom1 need to solve runoff_flow
+	diff numeric(12,3) DEFAULT 0.00, -- difference againts geom1_mod and geom1 ;
 	CONSTRAINT anl_drainedf_lows_arc_pkey PRIMARY KEY (arc_id),
 	CONSTRAINT anl_drained_flows_arc_fkey FOREIGN KEY (arc_id)
 		REFERENCES arc (arc_id) MATCH SIMPLE
 		ON UPDATE CASCADE ON DELETE CASCADE
 );
+
 
 
 DROP TABLE IF EXISTS anl_drained_flows_node CASCADE;

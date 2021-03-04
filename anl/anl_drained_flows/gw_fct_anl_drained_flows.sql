@@ -112,9 +112,15 @@ UPDATE anl_drained_flows_arc f SET full_flow = a.full_flow FROM (
 --------------------------------
 DELETE FROM anl_drained_flows_node;
 INSERT INTO anl_drained_flows_node (node_id, node_area, imperv, hasflowreg, flowreg_initflow)
-SELECT node_id, CASE WHEN sum(area) is null then 0 else sum(area) END, CASE WHEN sum(area*imperv)/sum(imperv) IS NULL THEN 0 ELSE sum(area*imperv)/sum(imperv) END, false,  0 FROM v_edit_node n
+SELECT node_id, 
+	CASE WHEN sum(area)::numeric(12,4) is null then 0 else sum(area)::numeric(12,4) END as area, 
+	CASE WHEN (sum(area*imperv)/sum(area))::numeric(12,4) IS NULL THEN 0 ELSE (sum(area*imperv)/sum(area))::numeric(12,4) END as imperv, 
+	false, 
+	0 
+	FROM v_edit_node n
 	LEFT JOIN v_edit_inp_subcatchment ON outlet_id = node_id
 	GROUP BY node_id;
+
 -- check: 
 SELECT * FROM anl_drained_flows_node;
 
@@ -133,12 +139,14 @@ UPDATE anl_drained_flows_arc SET isflowreg  = true WHERE arc_id  = '342';
 -- EXECUTE
 ---------- 
 SELECT SCHEMA_NAME.gw_fct_anl_drained_flows($${
-"data":{"parameters":{"resultId":"test1", "intensity":100}
+"data":{"parameters":{"resultId":"test_xavi", "intensity":100}
 }}$$) -- intensity expressed in mm/h
 
 TO CHECK:
 SELECT * FROM anl_drained_flows_arc ORDER BY arc_id;
 SELECT * FROM anl_drained_flows_node ORDER BY node_id;
+SELECT * FROM anl_arc WHERE fid = 367;
+SELECT * FROM anl_node WHERE fid = 367;
 
 */
 
@@ -181,8 +189,8 @@ BEGIN
 
 
 	-- reset storage tables
-	DELETE FROM anl_arc WHERE result_id = v_result AND fid = v_fid;
-	DELETE FROM anl_node WHERE result_id = v_result AND fid = v_fid;
+	DELETE FROM anl_arc WHERE result_id = v_result_id AND fid = v_fid;
+	DELETE FROM anl_node WHERE result_id = v_result_id AND fid = v_fid;
 	DELETE FROM audit_check_data WHERE fid=v_fid AND cur_user=current_user;
 	
 	-- reset algoritm tables
@@ -277,6 +285,20 @@ BEGIN
 
 	END LOOP;
 
+	-- update geom1_mod value
+	UPDATE anl_drained_flows_arc SET geom1_mod = a.geom1_mod, diff = a.diff FROM (
+	SELECT *, (geom1_mod-geom1)::numeric (12,2) as diff FROM (
+	SELECT arc_id, geom1, case when geom1_mod < geom1 then geom1 else geom1_mod end as geom1_mod FROM (
+	SELECT arc_id, geom1, full_flow, (((runoff_flow*manning*((2::double precision)^(2::double precision/3::double precision))) /(((abs(slope))^0.5)*pi()))^(3::double precision/8::double precision))::numeric(12,3)*2 as geom1_mod, runoff_flow
+	FROM anl_drained_flows_arc where slope > 0 or slope < 0) a )b
+	where geom1_mod is not null
+	ORDER BY diff desc, 1 desc) a
+	WHERE anl_drained_flows_arc.arc_id = a.arc_id;
+
+	-- clean geom1_mod and diff
+	UPDATE anl_drained_flows_arc SET geom1_mod = null, diff = null where manning is null or slope is null or runoff_flow is null;
+	
+
 	-- store results
 	INSERT INTO anl_node (node_id, fid, result_id, descript, the_geom)
 	SELECT node_id, v_fid, v_result_id, concat('{"node_inflow":',node_inflow,'"max_discharge_capacity":',max_discharge_capacity,',"drained_area":',drained_area,',"runoff_area":',runoff_area,',"runoff_flow":',runoff_flow,',"real_flow":',real_flow,'}'), 
@@ -285,7 +307,7 @@ BEGIN
 	JOIN node USING (node_id);
 
 	INSERT INTO anl_arc (arc_id, arccat_id, fid, result_id, descript, the_geom)
-	SELECT d.arc_id, d.arccat_id, v_fid, v_result_id, concat('{"full_flow":',full_flow,',"drained_area":',drained_area,',"runoff_area":',runoff_area,',"runoff_flow":',runoff_flow,',"real_flow":',real_flow,'}') ,
+	SELECT d.arc_id, d.arccat_id, v_fid, v_result_id, concat('{"full_flow":',full_flow,',"drained_area":',drained_area,',"runoff_area":',runoff_area,',"runoff_flow":',runoff_flow,',"real_flow":',real_flow,',"geom1_mod":',geom1_mod,',"diff":',diff,'}') ,
 	the_geom
 	FROM anl_drained_flows_arc d
 	JOIN arc USING (arc_id);
