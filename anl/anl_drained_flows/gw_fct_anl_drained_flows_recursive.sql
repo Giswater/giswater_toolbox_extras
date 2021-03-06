@@ -27,6 +27,11 @@ v_node_runoff_area double precision = 0.00;
 v_node_runoff_flow double precision = 0.00;
 v_imperv double precision = 0.00;
 
+v_runoff_time double precision = 0.00;
+
+v_max_runoff_time double precision = 0.00;
+v_max_runoff_length double precision = 0.00;
+
 
 -- upstream parameters
 v_ups_drained_area double precision = 0.00;
@@ -36,11 +41,16 @@ v_ups_real_flow double precision = 0.00;
 v_hasflowreg boolean = FALSE;
 v_flowreg_initflow  double precision = 0.00;
 v_weight double precision = 0.00; 
+v_ups_runoff_length double precision = 0.00; 
+v_ups_runoff_time double precision = 0.00; 
 
 -- arc parameters
 v_arc_capacity double precision = 0.00;
 rec_arc record;
 v_flowreg double precision = 0.00;
+v_length double precision = 0.00;
+v_current_runoff_length double precision = 0.00;
+v_current_runoff_time double precision = 0.00;
 
 -- return parameters
 v_tot_drained_area double precision = 0.00; 
@@ -66,8 +76,6 @@ BEGIN
 	v_node_runoff_area = v_node_drained_area * v_imperv/100::numeric;
 	v_node_runoff_flow = (v_node_runoff_area) * p_intensity / 360::numeric;
 
-	
-
 	--	Compute area
 	IF (v_track_id = 0) THEN
 	
@@ -75,11 +83,9 @@ BEGIN
 		UPDATE anl_drained_flows_node SET track_id = p_row WHERE node_id = p_node;
 		
 		-- Loop for all the upstream nodes
-		FOR rec_arc IN SELECT arc_id, full_flow, node_1 FROM arc a JOIN anl_drained_flows_arc d USING (arc_id) WHERE node_2 = p_node
+		FOR rec_arc IN SELECT arc_id, fflow, node_1, length FROM arc a JOIN anl_drained_flows_arc d USING (arc_id) WHERE node_2 = p_node
 		LOOP
 
-			--raise notice ' NODE: % , ARC: %', p_node, rec_arc.arc_id;
-		
 			-- Get max discharge capacity of the upstream node
 			SELECT max_discharge_capacity INTO v_max_capacity FROM anl_drained_flows_node WHERE node_id = rec_arc.node_1;
 			IF v_max_capacity = NULL THEN v_max_capacity = 0; END IF;
@@ -95,12 +101,14 @@ BEGIN
 			v_ups_runoff_area :=  (gw_fct_anl_drained_flows_recursive(rec_arc.node_1, p_row, p_intensity)->>'runoffArea')::double precision;
 			v_ups_runoff_flow :=  (gw_fct_anl_drained_flows_recursive(rec_arc.node_1, p_row, p_intensity)->>'runoffFlow')::double precision;
 			v_ups_real_flow := (gw_fct_anl_drained_flows_recursive(rec_arc.node_1, p_row, p_intensity)->>'realFlow')::double precision;
+			v_ups_runoff_length := (gw_fct_anl_drained_flows_recursive(rec_arc.node_1, p_row, p_intensity)->>'runoffLength')::double precision;
+			v_ups_runoff_time := (gw_fct_anl_drained_flows_recursive(rec_arc.node_1, p_row, p_intensity)->>'runoffTime')::double precision;	
 			
 			-- Check flow data availability for the current pipe
-			IF ((v_max_capacity > 0.0) AND (rec_arc.full_flow > 0.0)) THEN
+			IF ((v_max_capacity > 0.0) AND (rec_arc.fflow > 0.0)) THEN
 
 				-- Check flow availability for the other pipes
-				IF ((v_num_outlet > 1) AND (v_max_capacity <> rec_arc.full_flow)) THEN 
+				IF ((v_num_outlet > 1) AND (v_max_capacity <> rec_arc.fflow)) THEN 
 				
 					-- Node has flowregulator
 					IF v_hasflowreg THEN
@@ -124,7 +132,7 @@ BEGIN
 							IF v_flowreg = 0 THEN
 
 								-- factor for flow regulators
-								v_weight := (((rec_arc.full_flow + v_flowreg_initflow) / v_max_capacity) * (v_ups_runoff_flow - v_flowreg_initflow)) / v_ups_runoff_flow;
+								v_weight := (((rec_arc.fflow + v_flowreg_initflow) / v_max_capacity) * (v_ups_runoff_flow - v_flowreg_initflow)) / v_ups_runoff_flow;
 								v_ups_drained_area := v_ups_drained_area * v_weight;
 								v_ups_runoff_area := v_ups_runoff_area * v_weight;
 								v_ups_runoff_flow := v_ups_runoff_flow * v_weight;
@@ -132,7 +140,7 @@ BEGIN
 							-- Arc not flow regulator
 							ELSE
 								-- factor for normal conduits
-								v_weight := ((((rec_arc.full_flow - v_flowreg_initflow) / v_max_capacity) * (v_ups_runoff_flow - v_flowreg_initflow) + v_flowreg_initflow) / v_ups_runoff_flow);
+								v_weight := ((((rec_arc.fflow - v_flowreg_initflow) / v_max_capacity) * (v_ups_runoff_flow - v_flowreg_initflow) + v_flowreg_initflow) / v_ups_runoff_flow);
 								v_ups_drained_area := v_ups_drained_area * v_weight ;
 								v_ups_runoff_area := v_ups_runoff_area * v_weight ;
 								v_ups_runoff_flow := v_ups_runoff_flow * v_weight;
@@ -152,7 +160,7 @@ BEGIN
 							IF v_flowreg = 0 THEN
 
 								-- factor for flow regulators
-								v_weight := (((rec_arc.full_flow + v_flowreg_initflow) / v_max_capacity) * (v_ups_real_flow - v_flowreg_initflow)) / v_ups_real_flow;
+								v_weight := (((rec_arc.fflow + v_flowreg_initflow) / v_max_capacity) * (v_ups_real_flow - v_flowreg_initflow)) / v_ups_real_flow;
 								v_ups_real_flow := v_ups_real_flow * v_weight;
 
 								raise notice 'FLOW REGULATOR ------------------> arc_id %, weight % , ups_runoff_flow %, ups_real_flow %', rec_arc.arc_id, v_weight, v_ups_runoff_flow, v_ups_real_flow;
@@ -161,7 +169,7 @@ BEGIN
 							ELSE 
 
 								-- factor for normal conduits
-								v_weight := ((((rec_arc.full_flow - v_flowreg_initflow) / v_max_capacity) * (v_ups_real_flow - v_flowreg_initflow) + v_flowreg_initflow) / v_ups_real_flow);
+								v_weight := ((((rec_arc.fflow - v_flowreg_initflow) / v_max_capacity) * (v_ups_real_flow - v_flowreg_initflow) + v_flowreg_initflow) / v_ups_real_flow);
 								v_ups_real_flow := v_ups_real_flow * v_weight;
 
 								raise notice 'NORMAL CONDUIT ------------------>  arc_id %, weight %, ups_drained_area %, ups_runoff_area %, ups_runoff_flow %, ups_real_flow %', 
@@ -174,14 +182,14 @@ BEGIN
 					-- Node has more than one outlets, but there is no flowregulator detected: weightweing (wet oulet / total outlet) and (arc max flow / max capacity)
 					ELSE
 			
-						v_ups_drained_area := (v_num_wet_outlet / v_num_outlet) * (rec_arc.full_flow / v_max_capacity) * v_ups_drained_area;
-						v_ups_runoff_area := (v_num_wet_outlet / v_num_outlet) * (rec_arc.full_flow / v_max_capacity) * v_ups_runoff_area;
-						v_ups_runoff_flow := (v_num_wet_outlet / v_num_outlet) * (rec_arc.full_flow / v_max_capacity) * v_ups_runoff_flow;
-						v_ups_real_flow := (v_num_wet_outlet / v_num_outlet) * (rec_arc.full_flow / v_max_capacity) * v_ups_real_flow;
+						v_ups_drained_area := (v_num_wet_outlet / v_num_outlet) * (rec_arc.fflow / v_max_capacity) * v_ups_drained_area;
+						v_ups_runoff_area := (v_num_wet_outlet / v_num_outlet) * (rec_arc.fflow / v_max_capacity) * v_ups_runoff_area;
+						v_ups_runoff_flow := (v_num_wet_outlet / v_num_outlet) * (rec_arc.fflow / v_max_capacity) * v_ups_runoff_flow;
+						v_ups_real_flow := (v_num_wet_outlet / v_num_outlet) * (rec_arc.fflow / v_max_capacity) * v_ups_real_flow;
 
 					END IF;
 
-				-- If whole flow comes from upstream node to current arc (num outlet = 1 or v_max_capacity = rec_arc.full_flow)
+				-- If whole flow comes from upstream node to current arc (num outlet = 1 or v_max_capacity = rec_arc.fflow)
 				ELSE
 					v_num_outlet := GREATEST(v_num_outlet, 1);
 					v_ups_drained_area := v_ups_drained_area / v_num_outlet;
@@ -202,8 +210,8 @@ BEGIN
 			END IF;
 
 			-- Real flow is limited by arc capacity
-			IF (rec_arc.full_flow > 0) THEN 
-				v_ups_real_flow := LEAST(v_ups_real_flow, rec_arc.full_flow);
+			IF (rec_arc.fflow > 0) THEN 
+				v_ups_real_flow := LEAST(v_ups_real_flow, rec_arc.fflow);
 			END IF;
 
 			-- Update arc table
@@ -211,7 +219,7 @@ BEGIN
 				drained_area = v_ups_drained_area,
 				runoff_area = v_ups_runoff_area,
 				runoff_flow = v_ups_runoff_flow,
-				real_flow = v_ups_real_flow			
+				real_flow = v_ups_real_flow
 				WHERE arc_id = rec_arc.arc_id;
 
 			-- Adding values from each arc
@@ -219,6 +227,18 @@ BEGIN
 			v_tot_runoff_area := v_tot_runoff_area + v_ups_runoff_area;
 			v_tot_runoff_flow := v_tot_runoff_flow + v_ups_runoff_flow;
 			v_tot_real_flow := v_tot_real_flow + v_ups_real_flow;
+
+			-- runoff time and length
+			v_current_runoff_length := rec_arc.length + v_ups_runoff_length;
+			UPDATE anl_drained_flows_arc SET flow_fflow = real_flow/fflow WHERE fflow > 0 AND arc_id = rec_arc.arc_id;
+			UPDATE anl_drained_flows_arc SET fflow_vel = real_flow/area WHERE area > 0 AND arc_id = rec_arc.arc_id;
+			UPDATE anl_drained_flows_arc SET fflow_vel_time = length/fflow_vel WHERE fflow_vel > 0 AND arc_id = rec_arc.arc_id;
+			UPDATE anl_drained_flows_arc SET max_runoff_length = v_current_runoff_length WHERE arc_id = rec_arc.arc_id;		
+			v_current_runoff_time := (SELECT fflow_vel_time FROM anl_drained_flows_arc WHERE arc_id = rec_arc.arc_id) + v_ups_runoff_time;
+			UPDATE anl_drained_flows_arc SET fflow_vel_max_runoff_time = v_current_runoff_time WHERE arc_id = rec_arc.arc_id;		
+
+			v_max_runoff_length := GREATEST (v_max_runoff_length, v_current_runoff_length);
+			v_max_runoff_time := GREATEST (v_max_runoff_time, v_current_runoff_time);
 
 		END LOOP;
 		
@@ -233,25 +253,27 @@ BEGIN
 			drained_area = v_tot_drained_area,
 			runoff_area = v_tot_runoff_area,
 			runoff_flow = v_tot_runoff_flow,
-			real_flow = v_tot_real_flow			
+			real_flow = v_tot_real_flow,
+			fflow_vel_max_runoff_time = v_max_runoff_time,
+			max_runoff_length = v_max_runoff_length	
 			WHERE node_id = p_node;		
 
 	--	Cyclic!
 	ELSIF (v_track_id = p_row) THEN
 
-		SELECT drained_area, runoff_area, runoff_flow, real_flow INTO 
-			v_tot_drained_area, v_tot_runoff_area, v_tot_runoff_flow, v_tot_real_flow
+		SELECT drained_area, runoff_area, runoff_flow, real_flow, fflow_vel_max_runoff_time, max_runoff_length INTO 
+			v_tot_drained_area, v_tot_runoff_area, v_tot_runoff_flow, v_tot_real_flow, v_max_runoff_time, v_max_runoff_length
 			FROM anl_drained_flows_node WHERE node_id = p_node;
 
 	--	Previous result
 	ELSE 
-		SELECT drained_area, runoff_area, runoff_flow, real_flow INTO 
-			v_tot_drained_area, v_tot_runoff_area, v_tot_runoff_flow, v_tot_real_flow
+		SELECT drained_area, runoff_area, runoff_flow, real_flow, fflow_vel_max_runoff_time, max_runoff_length INTO 
+			v_tot_drained_area, v_tot_runoff_area, v_tot_runoff_flow, v_tot_real_flow, v_max_runoff_time, v_max_runoff_length
 			FROM anl_drained_flows_node WHERE node_id = p_node;
 	END IF;
 
 	-- Returning parameters
-	v_return = '{"drainedArea":'||v_tot_drained_area||',"runoffArea":'||v_tot_runoff_area||',"runoffFlow":'||v_tot_runoff_flow||',"realFlow":'||v_tot_real_flow||'}';
+	v_return = '{"drainedArea":'||v_tot_drained_area||',"runoffArea":'||v_tot_runoff_area||',"runoffFlow":'||v_tot_runoff_flow||',"realFlow":'||v_tot_real_flow||',"runoffLength":'||v_max_runoff_length||',"runoffTime":'||v_max_runoff_time||'}';
 	RETURN v_return;
 
 END;
