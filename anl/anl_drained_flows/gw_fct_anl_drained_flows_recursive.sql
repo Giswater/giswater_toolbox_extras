@@ -231,11 +231,11 @@ BEGIN
 			-- runoff time and length
 			v_current_runoff_length := rec_arc.length + v_ups_runoff_length;
 			UPDATE anl_drained_flows_arc SET flow_fflow = real_flow/fflow WHERE fflow > 0 AND arc_id = rec_arc.arc_id;
-			UPDATE anl_drained_flows_arc SET fflow_vel = real_flow/area WHERE area > 0 AND arc_id = rec_arc.arc_id;
+			UPDATE anl_drained_flows_arc SET fflow_vel = fflow/area WHERE area > 0 AND arc_id = rec_arc.arc_id;
 			UPDATE anl_drained_flows_arc SET fflow_vel_time = length/fflow_vel WHERE fflow_vel > 0 AND arc_id = rec_arc.arc_id;
 			UPDATE anl_drained_flows_arc SET max_runoff_length = v_current_runoff_length WHERE arc_id = rec_arc.arc_id;		
 			v_current_runoff_time := (SELECT fflow_vel_time FROM anl_drained_flows_arc WHERE arc_id = rec_arc.arc_id) + v_ups_runoff_time;
-			UPDATE anl_drained_flows_arc SET fflow_vel_max_runoff_time = v_current_runoff_time WHERE arc_id = rec_arc.arc_id;		
+			UPDATE anl_drained_flows_arc SET max_runoff_time = v_current_runoff_time WHERE arc_id = rec_arc.arc_id;		
 
 			v_max_runoff_length := GREATEST (v_max_runoff_length, v_current_runoff_length);
 			v_max_runoff_time := GREATEST (v_max_runoff_time, v_current_runoff_time);
@@ -254,20 +254,20 @@ BEGIN
 			runoff_area = v_tot_runoff_area,
 			runoff_flow = v_tot_runoff_flow,
 			real_flow = v_tot_real_flow,
-			fflow_vel_max_runoff_time = v_max_runoff_time,
+			max_runoff_time = v_max_runoff_time,
 			max_runoff_length = v_max_runoff_length	
 			WHERE node_id = p_node;		
 
 	--	Cyclic!
 	ELSIF (v_track_id = p_row) THEN
 
-		SELECT drained_area, runoff_area, runoff_flow, real_flow, fflow_vel_max_runoff_time, max_runoff_length INTO 
+		SELECT drained_area, runoff_area, runoff_flow, real_flow, max_runoff_time, max_runoff_length INTO 
 			v_tot_drained_area, v_tot_runoff_area, v_tot_runoff_flow, v_tot_real_flow, v_max_runoff_time, v_max_runoff_length
 			FROM anl_drained_flows_node WHERE node_id = p_node;
 
 	--	Previous result
 	ELSE 
-		SELECT drained_area, runoff_area, runoff_flow, real_flow, fflow_vel_max_runoff_time, max_runoff_length INTO 
+		SELECT drained_area, runoff_area, runoff_flow, real_flow, max_runoff_time, max_runoff_length INTO 
 			v_tot_drained_area, v_tot_runoff_area, v_tot_runoff_flow, v_tot_real_flow, v_max_runoff_time, v_max_runoff_length
 			FROM anl_drained_flows_node WHERE node_id = p_node;
 	END IF;

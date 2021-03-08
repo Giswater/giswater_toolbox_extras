@@ -227,10 +227,12 @@ UPDATE anl_drained_flows_arc SET isflowreg  = true WHERE arc_id  = '342';
 
 -- EXECUTE
 ---------- 
-SELECT SCHEMA_NAME.gw_fct_anl_drained_flows($${"data":{"parameters":{"resultId":"test_xavi", "intensity":100, "hydrologyScenario":5}}}$$) -- intensity expressed in mm/h
+SELECT SCHEMA_NAME.gw_fct_anl_drained_flows($${"data":{"parameters":{"resultId":"test_xavi", "intensity":100, "hydrologyScenario":6}}}$$) -- intensity expressed in mm/h
+
+SELECT * FROM SCHEMA_NAME.cat_hydrology
 
 TO CHECK:
-SELECT * FROM anl_drained_flows_arc ORDER BY max_runoff_time;
+SELECT * FROM anl_drained_flows_arc ORDER BY arc_id
 SELECT * FROM anl_drained_flows_node ORDER BY node_id;
 SELECT * FROM anl_drained_flows_result_arc ORDER BY arc_id;
 SELECT * FROM anl_drained_flows_result_node ORDER BY arc_id;
@@ -414,17 +416,17 @@ BEGIN
 	-- store results
 	INSERT INTO anl_drained_flows_result_node 
 	(result_id, node_id, node_area, imperv, dw_flow, hasflowreg, flowreg_initflow, node_inflow, max_discharge_capacity, num_outlet, num_wet_outlet, 
-	track_id, drained_area, runoff_area, runoff_flow, real_flow, fflow_vel_max_runoff_time, max_runoff_length)
+	track_id, drained_area, runoff_area, runoff_flow, real_flow, max_runoff_time, max_runoff_length)
 	SELECT v_result_id, node_id, node_area, imperv, dw_flow, hasflowreg, flowreg_initflow, node_inflow, max_discharge_capacity, num_outlet, num_wet_outlet, 
-	track_id, drained_area, runoff_area, runoff_flow, real_flow,fflow_vel_max_runoff_time,  max_runoff_length
+	track_id, drained_area, runoff_area, runoff_flow, real_flow, max_runoff_time,  max_runoff_length
 	FROM anl_drained_flows_node;
 
 	INSERT INTO anl_drained_flows_result_arc 
 	(result_id,arc_id,arccat_id,epa_shape,geom1,geom2,geom3,geom4,length,area,manning,full_rh,slope,fflow,isflowreg, shape_cycles, slope_cycles,
-	drained_area,runoff_area,runoff_flow,real_flow,geom1_mod,diff,flow_fflow,fflow_vel,fflow_vel_time,fflow_vel_max_runoff_time,max_runoff_length)
+	drained_area,runoff_area,runoff_flow,real_flow,geom1_mod,diff,flow_fflow,fflow_vel,fflow_vel_time,max_runoff_time,max_runoff_length)
 	SELECT 
 	v_result_id,arc_id,arccat_id,epa_shape,geom1,geom2,geom3,geom4,length,area,manning,full_rh,slope,fflow,isflowreg, shape_cycles, slope_cycles,
-	drained_area,runoff_area,runoff_flow,real_flow,geom1_mod,diff,flow_fflow,fflow_vel,fflow_vel_time,fflow_vel_max_runoff_time,max_runoff_length
+	drained_area,runoff_area,runoff_flow,real_flow,geom1_mod,diff,flow_fflow,fflow_vel,fflow_vel_time,max_runoff_time,max_runoff_length
 	FROM anl_drained_flows_arc;
 	
 	
