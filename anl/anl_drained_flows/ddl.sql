@@ -70,8 +70,8 @@ CREATE TABLE anl_drained_flows_node
 	real_flow numeric(12,4) DEFAULT 0.00, --  real flow according upstream network limitations
 	max_runoff_time numeric(12,3) DEFAULT 0.00,  -- maximum runoff time (calculated using fflow for each conduit)
 	max_runoff_length numeric(12,3) DEFAULT 0.00, -- maximum runoff length
-	CONSTRAINT anl_drained_flows_node_pkey PRIMARY KEY (node_id),
-	CONSTRAINT anl_drained_flows_node_fkey FOREIGN KEY (node_id) REFERENCES (node_id) MATCH SIMPLE ON UPDATE CASCADE ON DELETE CASCADE
+	node_flooding numeric(12,3) DEFAULT 0.00, -- flow rate flooded on node
+	CONSTRAINT anl_drained_flows_node_pkey PRIMARY KEY (node_id)
 );
 
 
@@ -110,8 +110,9 @@ drained_area numeric(12,4),
 runoff_area numeric(12,4),
 runoff_flow numeric(12,4),
 real_flow numeric(12,4),
-max_runoff_time numeric(12,3) DEFAULT 0.00,  -- 
-max_runoff_length numeric(12,3) DEFAULT 0.00,  -- 
+max_runoff_time numeric(12,3) DEFAULT 0.00,
+max_runoff_length numeric(12,3) DEFAULT 0.00, 
+node_flooding numeric(12,3) DEFAULT 0.00,
 CONSTRAINT anl_drained_flows_node_fkey FOREIGN KEY (result_id)
 REFERENCES anl_drained_flows_result_cat (result_id) MATCH SIMPLE ON UPDATE CASCADE ON DELETE CASCADE);
 

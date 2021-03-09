@@ -227,15 +227,28 @@ UPDATE anl_drained_flows_arc SET isflowreg  = true WHERE arc_id  = '342';
 
 -- EXECUTE
 ---------- 
-SELECT SCHEMA_NAME.gw_fct_anl_drained_flows($${"data":{"parameters":{"resultId":"test_xavi", "intensity":100, "hydrologyScenario":6}}}$$) -- intensity expressed in mm/h
+SELECT SCHEMA_NAME.gw_fct_anl_drained_flows($${"data":{"parameters":{"resultId":"test_flood", "intensity":100, "psectors":"removeAll", "hydrologyScenario":6}}}$$) -- intensity expressed in mm/h
+SELECT SCHEMA_NAME.gw_fct_anl_drained_flows($${"data":{"parameters":{"resultId":"test_flood", "intensity":100, "psectors":"addAll", "hydrologyScenario":6}}}$$) -- intensity expressed in mm/h
+
+WARNING: psectors key must be according v_edit_node & v_edit_arc initial values to fullfill anl_drained_flows tables
+Initial LOAD must be done without psectors
+After psector management maybe it is possible to recreate final network adding all psectors. To do this, it is mandatory to fullfill tables again
+
+UPDATE anl_drained_flows_arc SET slope =  100*(676.4-669)/315  WHERE arc_id  ='10377'
+
+select (0.2083+0.1813)
+select (0.2387+0.1948)
 
 SELECT * FROM SCHEMA_NAME.cat_hydrology
 
 TO CHECK:
-SELECT * FROM anl_drained_flows_arc ORDER BY arc_id
-SELECT * FROM anl_drained_flows_node ORDER BY node_id;
+SELECT * FROM anl_drained_flows_arc ORDER BY diff desc
+SELECT * FROM anl_drained_flows_node ORDER BY node_flooding;
+
 SELECT * FROM anl_drained_flows_result_arc ORDER BY arc_id;
 SELECT * FROM anl_drained_flows_result_node ORDER BY arc_id;
+
+
 */
 
 DECLARE
@@ -262,6 +275,7 @@ v_result_info json;
 v_result_line json;
 v_returnarc boolean = false;
 v_hydrologyScenario integer;
+v_psectors text;
 
 BEGIN
 
@@ -276,7 +290,7 @@ BEGIN
 	v_result_id:= ((p_data ->>'data')::json->>'parameters')::json->>'resultId';
 	v_returnarc:= ((p_data ->>'data')::json->>'parameters')::json->>'returnArcLayer';
 	v_hydrologyScenario:= ((p_data ->>'data')::json->>'parameters')::json->>'hydrologyScenario';
-
+	v_psectors:= ((p_data ->>'data')::json->>'parameters')::json->>'state';
 
 	-- reset storage tables
 	DELETE FROM anl_arc WHERE result_id = v_result_id AND fid = v_fid;
@@ -286,6 +300,20 @@ BEGIN
 	-- reset anl drained flows selector
 	DELETE FROM selector_drained_flows WHERE cur_user = current_user;
 	INSERT INTO selector_drained_flows VALUES (v_result_id, current_user);
+
+	-- save psector selector
+	DELETE FROM temp_table WHERE fid=287 AND cur_user=current_user;
+	INSERT INTO temp_table (fid, text_column)  
+	SELECT 287, (array_agg(psector_id)) FROM selector_psector WHERE cur_user=current_user;
+
+	IF v_psectors = 'removeAll' THEN
+		DELETE FROM selector_psector WHERE cur_user = current_user;
+		
+	ELSIF v_psectors = 'addAll' THEN
+
+		INSERT INTO selector_psector SELECT psector_id, cur_user FROM plan_psector
+		ON CONFLICT (psector_id, cur_user) DO NOTHING;
+	END IF;
 
 	-- upsert anl_drained_flows_result_cat
 	INSERT INTO anl_drained_flows_result_cat VALUES (v_result_id, current_user) ON CONFLICT (result_id) DO NOTHING;
@@ -398,12 +426,11 @@ BEGIN
 
 	END LOOP;
 	
-
 	-- update geom1_mod value
 	UPDATE anl_drained_flows_arc SET geom1_mod = a.geom1_mod, diff = a.diff FROM (
 	SELECT *, (geom1_mod-geom1)::numeric (12,2) as diff FROM (
 	SELECT arc_id, geom1, case when geom1_mod < geom1 then geom1 else geom1_mod end as geom1_mod FROM (
-	SELECT arc_id, geom1, fflow, (((runoff_flow*manning*((2::double precision)^(2::double precision/3::double precision))) /(((abs(slope))^0.5)*pi()))^(3::double precision/8::double precision))::numeric(12,3)*2 as geom1_mod, runoff_flow
+	SELECT arc_id, geom1, fflow, (((runoff_flow*manning*((2::double precision)^(2::double precision/3::double precision))) /(((abs(slope/100))^0.5)*pi()))^(3::double precision/8::double precision))::numeric(12,3)*2 as geom1_mod, runoff_flow
 	FROM anl_drained_flows_arc where slope > 0 or slope < 0) a )b
 	where geom1_mod is not null
 	ORDER BY diff desc, 1 desc) a
@@ -412,13 +439,25 @@ BEGIN
 	-- clean geom1_mod and diff
 	UPDATE anl_drained_flows_arc SET geom1_mod = null, diff = null where manning is null or slope is null or runoff_flow is null;
 
-	
+	-- update node_inflow
+	UPDATE anl_drained_flows_node SET node_inflow= (node_area*(imperv/100)*v_intensity/360)::numeric(12,4);
+
+	-- update node_flooding 
+	UPDATE anl_drained_flows_node d SET node_flooding = (node_inflow+entry-exit) FROM
+	(SELECT * FROM
+	(SELECT node_id, sum(d.real_flow) as entry FROM anl_drained_flows_node n JOIN arc a ON node_2 = n.node_id JOIN anl_drained_flows_arc d USING (arc_id) group by node_id)a
+	JOIN
+	(SELECT node_id, sum(d.real_flow) as exit FROM anl_drained_flows_node n JOIN arc a ON node_1 = n.node_id JOIN anl_drained_flows_arc d USING (arc_id) group by node_id)b
+	USING (node_id)
+	) a
+	WHERE d.node_id = a.node_id;
+
 	-- store results
 	INSERT INTO anl_drained_flows_result_node 
 	(result_id, node_id, node_area, imperv, dw_flow, hasflowreg, flowreg_initflow, node_inflow, max_discharge_capacity, num_outlet, num_wet_outlet, 
-	track_id, drained_area, runoff_area, runoff_flow, real_flow, max_runoff_time, max_runoff_length)
+	track_id, drained_area, runoff_area, runoff_flow, real_flow, max_runoff_time, max_runoff_length, node_flooding)
 	SELECT v_result_id, node_id, node_area, imperv, dw_flow, hasflowreg, flowreg_initflow, node_inflow, max_discharge_capacity, num_outlet, num_wet_outlet, 
-	track_id, drained_area, runoff_area, runoff_flow, real_flow, max_runoff_time,  max_runoff_length
+	track_id, drained_area, runoff_area, runoff_flow, real_flow, max_runoff_time,  max_runoff_length, node_flooding
 	FROM anl_drained_flows_node;
 
 	INSERT INTO anl_drained_flows_result_arc 
@@ -428,8 +467,12 @@ BEGIN
 	v_result_id,arc_id,arccat_id,epa_shape,geom1,geom2,geom3,geom4,length,area,manning,full_rh,slope,fflow,isflowreg, shape_cycles, slope_cycles,
 	drained_area,runoff_area,runoff_flow,real_flow,geom1_mod,diff,flow_fflow,fflow_vel,fflow_vel_time,max_runoff_time,max_runoff_length
 	FROM anl_drained_flows_arc;
-	
-	
+
+	-- restore psector selector
+	INSERT INTO selector_psector (psector_id, cur_user)
+	select unnest(text_column::integer[]), current_user from temp_table where fid=287 and cur_user=current_user
+	ON CONFLICT (psector_id, cur_user) DO NOTHING;
+		
 	-- insert spacers for log
 	INSERT INTO audit_check_data (fid, result_id, criticity, error_message) VALUES (v_fid, v_result_id, 4, '');
 	INSERT INTO audit_check_data (fid, result_id, criticity, error_message) VALUES (v_fid, v_result_id, 3, '');
