@@ -227,7 +227,7 @@ UPDATE anl_drained_flows_arc SET isflowreg  = true WHERE arc_id  = '342';
 
 -- EXECUTE
 ---------- 
-SELECT SCHEMA_NAME.gw_fct_anl_drained_flows($${"data":{"parameters":{"resultId":"test_flood", "intensity":100, "psectors":"removeAll", "hydrologyScenario":6}}}$$) -- intensity expressed in mm/h
+SELECT ud.gw_fct_anl_drained_flows($${"data":{"parameters":{"resultId":"test_flood", "intensity":100, "psectors":"removeAll", "hydrologyScenario":6}}}$$) -- intensity expressed in mm/h
 SELECT SCHEMA_NAME.gw_fct_anl_drained_flows($${"data":{"parameters":{"resultId":"test_flood", "intensity":100, "psectors":"addAll", "hydrologyScenario":6}}}$$) -- intensity expressed in mm/h
 
 WARNING: psectors key must be according v_edit_node & v_edit_arc initial values to fullfill anl_drained_flows tables
@@ -243,7 +243,7 @@ SELECT * FROM SCHEMA_NAME.cat_hydrology
 
 TO CHECK:
 SELECT * FROM anl_drained_flows_arc ORDER BY diff desc
-SELECT * FROM anl_drained_flows_node ORDER BY node_flooding;
+SELECT * FROM anl_drained_flows_node ORDER BY drained_area;
 
 SELECT * FROM anl_drained_flows_result_arc ORDER BY arc_id;
 SELECT * FROM anl_drained_flows_result_node ORDER BY arc_id;
