@@ -7,7 +7,7 @@ This version of Giswater is provided by Giswater Association
 --FUNCTION CODE: 3010
 
 
-CREATE OR REPLACE FUNCTION SCHEMA_NAME.gw_fct_anl_drained_flows(p_data json)
+CREATE OR REPLACE FUNCTION ud.gw_fct_anl_drained_flows(p_data json)
 RETURNS json AS
 
 $BODY$
@@ -15,7 +15,7 @@ $BODY$
 /*
 EXAMPLE
 -------
-SELECT SCHEMA_NAME.gw_fct_anl_drained_flows($${"data":{"parameters":{"resultId":"test1", "intensity":100, "returnArcLayer":false,}}}$$) 
+SELECT ud.gw_fct_anl_drained_flows($${"data":{"parameters":{"resultId":"test1", "intensity":100, "returnArcLayer":false,}}}$$) 
 resultId: Id to store as many results as you like on anl_arc & anl_node tables (fid = 367)
 intensity: expressed in mm/h
 returnArcLayer: To add temporal table on ToC to visualize results of algorithm
@@ -25,6 +25,10 @@ returnArcLayer: To add temporal table on ToC to visualize results of algorithm
 
 INSTRUCTIONS
 ------------
+DELETE FROM anl_drained_flows_node;
+DELETE FROM anl_drained_flows_arc;
+
+
 Algorithm works with two tables and specific columns:
 	- anl_drained_arc table: arc_id, full_flow, isflowreg
 	- anl_drained_node table: node_id, node_area, imperv, dw_flow, hasflowreg, flowreg_initflow
@@ -56,13 +60,15 @@ SELECT * FROM anl_drained_flows_arc
 -- fill anl_drained_arc table
 -------------------------------
 DELETE FROM anl_drained_flows_arc;
+
+WARNING: IT IS MANDATORY TO PROVIDED SLOPE AS PERCENT NOT UNITARI. KEEP SLOPE VALUES BEFORE INSERT...
 INSERT INTO anl_drained_flows_arc (arc_id, arccat_id, epa_shape, geom1, geom2, geom3, geom4, length, area, manning, slope, isflowreg)
-SELECT arc_id, arccat_id, shape, geom1, geom2, geom3, geom4, st_length(the_geom), area, n, slope, false FROM v_edit_arc a
+SELECT arc_id, arccat_id, shape, geom1, geom2, geom3, geom4, st_length(the_geom), area, n, slope, false FROM v_edit_arc_slope4dec a
 	LEFT JOIN cat_arc ON arccat_id = id 
 	LEFT JOIN cat_arc_shape s ON shape=s.id 
 	LEFT JOIN cat_mat_arc m ON a.matcat_id = m.id;
 -- check:
-SELECT * FROM anl_drained_flows_arc WHERE epa_shape  ='RECTANGULAR';
+SELECT * FROM anl_drained_flows_arc
 
 
 -- update anl_drained_arc, full_rh values
@@ -91,13 +97,14 @@ The number of times executed is shape_cycles and slope_cycles. This cycles takes
 ---------------------------------------------------------------------------------------------------------------------
 
 -- shape upstream
-UPDATE anl_drained_flows_arc d SET shape_cycles = shape_cycles + 1, area = upstream_area, full_rh = upstream_full_rh 
+UPDATE anl_drained_flows_arc d SET shape_cycles = upstream_shape_cycles + 1, area = upstream_area, full_rh = upstream_full_rh 
 FROM(
-	SELECT a.arc_id, area, full_rh, upstream_area, upstream_full_rh FROM (
-		SELECT a.arc_id, upstream_arc, full_rh AS upstream_full_rh, area AS upstream_area FROM (
-			SELECT arc_id, upstream_arc FROM (
-				SELECT a.arc_id, a1.arc_id upstream_arc FROM v_edit_arc a
-				JOIN v_edit_arc a1 ON a.node_1 = a1.node_2
+	SELECT a.arc_id, area, full_rh, upstream_area, upstream_full_rh, upstream_shape_cycles FROM (
+		SELECT a.arc_id, upstream_arc, upstream_shape_cycles, full_rh AS upstream_full_rh, area AS upstream_area FROM (
+			SELECT arc_id, upstream_arc, upstream_shape_cycles FROM (
+				SELECT a.arc_id, a1.arc_id upstream_arc, an.shape_cycles as upstream_shape_cycles FROM v_edit_arc_slope4dec a
+				JOIN v_edit_arc_slope4dec a1 ON a.node_1 = a1.node_2
+				JOIN anl_drained_flows_arc an ON a1.arc_id = an.arc_id
 				)a
 			) a
 		JOIN anl_drained_flows_arc b ON b.arc_id = a.upstream_arc order by 1
@@ -109,13 +116,14 @@ AND d.arc_id = a.arc_id;
 
 
 -- shape downstream
-UPDATE anl_drained_flows_arc d SET shape_cycles = shape_cycles + 1, area = downstream_area, full_rh = downstream_full_rh 
+UPDATE anl_drained_flows_arc d SET shape_cycles = downstream_shape_cycles + 1, area = downstream_area, full_rh = downstream_full_rh 
 FROM(
-	SELECT a.arc_id, area, full_rh, downstream_area, downstream_full_rh FROM (
-		SELECT a.arc_id, downstream_arc, full_rh AS downstream_full_rh, area AS downstream_area FROM (
-			SELECT arc_id, downstream_arc FROM (
-				SELECT a.arc_id, a1.arc_id downstream_arc FROM v_edit_arc a
-				JOIN v_edit_arc a1 ON a.node_2 = a1.node_1
+	SELECT a.arc_id, area, full_rh, downstream_area, downstream_full_rh, downstream_shape_cycles FROM (
+		SELECT a.arc_id, downstream_arc, downstream_shape_cycles, full_rh AS downstream_full_rh, area AS downstream_area FROM (
+			SELECT arc_id, downstream_arc, downstream_shape_cycles FROM (
+				SELECT a.arc_id, a1.arc_id downstream_arc, an.shape_cycles as downstream_shape_cycles FROM v_edit_arc_slope4dec a
+				JOIN v_edit_arc_slope4dec a1 ON a.node_2 = a1.node_1
+				JOIN anl_drained_flows_arc an ON a1.arc_id = an.arc_id
 				)a
 			) a
 		JOIN anl_drained_flows_arc b ON b.arc_id = a.downstream_arc order by 1
@@ -128,13 +136,14 @@ AND d.arc_id = a.arc_id;
 
 
 -- slope upstream
-UPDATE anl_drained_flows_arc d SET slope_cycles = slope_cycles + 1, slope = upstream_slope 
+UPDATE anl_drained_flows_arc d SET slope_cycles = upstream_slope_cycles + 1, slope = upstream_slope 
 FROM(
-	SELECT a.arc_id, slope, upstream_slope FROM (
-		SELECT a.arc_id, upstream_arc, slope AS upstream_slope FROM (
-			SELECT arc_id, upstream_arc FROM (
-				SELECT a.arc_id, a1.arc_id upstream_arc FROM v_edit_arc a
-				JOIN v_edit_arc a1 ON a.node_1 = a1.node_2
+	SELECT a.arc_id, slope, upstream_slope, upstream_slope_cycles FROM (
+		SELECT a.arc_id, upstream_arc, slope AS upstream_slope, upstream_slope_cycles FROM (
+			SELECT arc_id, upstream_arc, upstream_slope_cycles FROM (
+				SELECT a.arc_id, a1.arc_id upstream_arc ,an.slope_cycles as upstream_slope_cycles FROM v_edit_arc_slope4dec a
+				JOIN v_edit_arc_slope4dec a1 ON a.node_1 = a1.node_2
+				JOIN anl_drained_flows_arc an ON a1.arc_id = an.arc_id
 				)a
 			) a
 		JOIN anl_drained_flows_arc b ON b.arc_id = a.upstream_arc order by 1
@@ -146,13 +155,14 @@ AND d.arc_id = a.arc_id;
 
 
 -- slope downstream
-UPDATE anl_drained_flows_arc d SET slope_cycles = slope_cycles + 1, slope = downstream_slope 
+UPDATE anl_drained_flows_arc d SET slope_cycles = downstream_slope_cycles + 1, slope = downstream_slope 
 FROM(
-	SELECT a.arc_id, slope, downstream_slope FROM (
-		SELECT a.arc_id, downstream_arc, slope AS downstream_slope FROM (
-			SELECT arc_id, downstream_arc FROM (
-				SELECT a.arc_id, a1.arc_id downstream_arc FROM v_edit_arc a
-				JOIN v_edit_arc a1 ON a.node_2 = a1.node_1
+	SELECT a.arc_id, slope, downstream_slope, downstream_slope_cycles FROM (
+		SELECT a.arc_id, downstream_arc, slope AS downstream_slope, downstream_slope_cycles FROM (
+			SELECT arc_id, downstream_arc, downstream_slope_cycles FROM (
+				SELECT a.arc_id, a1.arc_id downstream_arc, an.slope_cycles as downstream_slope_cycles FROM v_edit_arc_slope4dec a
+				JOIN v_edit_arc_slope4dec a1 ON a.node_2 = a1.node_1
+				JOIN anl_drained_flows_arc an ON a1.arc_id = an.arc_id
 				)a
 			) a
 		JOIN anl_drained_flows_arc b ON b.arc_id = a.downstream_arc order by 1
@@ -162,15 +172,17 @@ FROM(
 )a WHERE d.slope is null
 AND d.arc_id = a.arc_id;
 
+
+SELECT * FROM anl_drained_flows_arc WHERE shape_cycles = 3
+SELECT * FROM anl_drained_flows_arc WHERE area is null or area = 0
+
+
+
 -- not cero slopes
 UPDATE anl_drained_flows_arc SET slope = 0.002 WHERE slope = 0;
 
 -- not null manning
 UPDATE anl_drained_flows_arc d SET material_estimated = true, manning = 0.014 WHERE manning IS NULL;
-
-
--- comprovation
-SELECT * FROM anl_drained_flows_arc WHERE full_rh = 0 or slope is null or area = 0
 
 
 ------------------------------------------------------------------------
@@ -194,8 +206,8 @@ UPDATE anl_drained_flows_arc d SET full_flow = 0.2 WHERE epa_shape = 'FORCE_MAIN
 -- re-update anl_drained_arc, full_flow values ONLY for VIRTUAL ARCS (using full_flow from downstream arc)
 ----------------------------------------------------------------------------------------------------------
 UPDATE anl_drained_flows_arc f SET full_flow = a.full_flow FROM (
-	SELECT a1.arc_id, full_flow FROM v_edit_arc a1 	
-	JOIN v_edit_arc a2 ON a1.node_2 = a2.node_1 
+	SELECT a1.arc_id, full_flow FROM v_edit_arc_slope4dec a1 	
+	JOIN v_edit_arc_slope4dec a2 ON a1.node_2 = a2.node_1 
 	JOIN anl_drained_flows_arc d ON a2.arc_id = d.arc_id
 	JOIN cat_feature_arc f1 ON f1.id = a1.arc_type
 	JOIN cat_feature_arc f2 ON f2.id = a2.arc_type
@@ -207,7 +219,7 @@ UPDATE anl_drained_flows_arc f SET full_flow = a.full_flow FROM (
 -- insert anl_drained_node table
 --------------------------------
 DELETE FROM anl_drained_flows_node;
-INSERT INTO anl_drained_flows_node (node_id, node_area, imperv, hasflowreg, flowreg_initflow)
+INSERT INTO anl_drained_flows_node (node_id)
 SELECT node_id FROM v_edit_node;
 
 -- check: 
@@ -216,19 +228,19 @@ SELECT * FROM anl_drained_flows_node;
 
 -- configure flow regulators
 ----------------------------
--- node 237
-UPDATE anl_drained_flows_node SET hasflowreg = true, flowreg_initflow = 0.25 where node_id  = '237';
-UPDATE anl_drained_flows_arc SET isflowreg  = true WHERE arc_id  = '300';
+-- node 21762
+UPDATE ud.anl_drained_flows_node SET hasflowreg = true, flowreg_initflow = 0.585 where node_id  = '21762';
+UPDATE anl_drained_flows_arc SET isflowreg  = true WHERE arc_id  = '10495';
 
--- node 238
-UPDATE anl_drained_flows_node SET hasflowreg = true, flowreg_initflow = 0.2 where node_id  = '238';
-UPDATE anl_drained_flows_arc SET isflowreg  = true WHERE arc_id  = '342';
+-- node 22644
+UPDATE ud.anl_drained_flows_node SET hasflowreg = true, flowreg_initflow = 0.3607 where node_id  = '22644';
+UPDATE anl_drained_flows_arc SET isflowreg  = true WHERE arc_id  = '11327';
 
 
 -- EXECUTE
 ---------- 
 SELECT ud.gw_fct_anl_drained_flows($${"data":{"parameters":{"resultId":"test_flood", "intensity":100, "psectors":"removeAll", "hydrologyScenario":6}}}$$) -- intensity expressed in mm/h
-SELECT SCHEMA_NAME.gw_fct_anl_drained_flows($${"data":{"parameters":{"resultId":"test_flood", "intensity":100, "psectors":"addAll", "hydrologyScenario":6}}}$$) -- intensity expressed in mm/h
+SELECT ud.gw_fct_anl_drained_flows($${"data":{"parameters":{"resultId":"test_flood", "intensity":100, "psectors":"addAll", "hydrologyScenario":6}}}$$) -- intensity expressed in mm/h
 
 WARNING: psectors key must be according v_edit_node & v_edit_arc initial values to fullfill anl_drained_flows tables
 Initial LOAD must be done without psectors
@@ -239,11 +251,11 @@ UPDATE anl_drained_flows_arc SET slope =  100*(676.4-669)/315  WHERE arc_id  ='1
 select (0.2083+0.1813)
 select (0.2387+0.1948)
 
-SELECT * FROM SCHEMA_NAME.cat_hydrology
+SELECT * FROM ud.cat_hydrology
 
 TO CHECK:
 SELECT * FROM anl_drained_flows_arc ORDER BY diff desc
-SELECT * FROM anl_drained_flows_node ORDER BY drained_area;
+SELECT * FROM anl_drained_flows_node ORDER BY node_flooding desc;
 
 SELECT * FROM anl_drained_flows_result_arc ORDER BY arc_id;
 SELECT * FROM anl_drained_flows_result_node ORDER BY arc_id;
@@ -280,7 +292,7 @@ v_psectors text;
 BEGIN
 
 	-- search path
-	SET search_path = "SCHEMA_NAME", public;
+	SET search_path = "ud", public;
 
 	-- select version
 	SELECT giswater INTO v_version FROM sys_version order by 1 desc limit 1;
@@ -451,6 +463,8 @@ BEGIN
 	USING (node_id)
 	) a
 	WHERE d.node_id = a.node_id;
+
+	UPDATE anl_drained_flows_node SET node_flooding = 0 where node_flooding IS NULL;
 
 	-- store results
 	INSERT INTO anl_drained_flows_result_node 
