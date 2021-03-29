@@ -22,7 +22,7 @@ CREATE TABLE anl_drained_flows_arc
 	manning double precision  DEFAULT 0.00,-- manning's number for mannings formula (cat_mat_arc)
 	full_rh double precision  DEFAULT 0.00,-- hydraulic radius at full flow for conduit crossection (m)
 	slope double precision  DEFAULT 0.00,-- conduit's slope (m/m)
-	full_flow numeric(12,4) DEFAULT 0.00, -- max flow for conduit according manning's formula at full capacity
+	fflow numeric(12,4) DEFAULT 0.00, -- max flow for conduit according manning's formula at full capacity
 	isflowreg boolean DEFAULT false, -- conduit is flow regulator: Need to be informed in combination with hasflowreg from anl_drained_flows_node table
 	shape_cycles int2 DEFAULT 0, -- some value have been estimated catching closest arcs values (slope, rh or area)
 	slope_cycles int2 DEFAULT 0, -- some value have been estimated catching closest arcs values (slope, rh or area)
