@@ -35,7 +35,7 @@ BEGIN
 	-------------------------------
 	-- WARNING: IT IS MANDATORY TO PROVIDED SLOPE AS PERCENT NOT UNITARI. KEEP SLOPE VALUES BEFORE INSERT...
 	INSERT INTO anl_drained_flows_arc (arc_id, arccat_id, epa_shape, geom1, geom2, geom3, geom4, length, area, manning, slope, isflowreg)
-	SELECT arc_id, arccat_id, shape, geom1, geom2, geom3, geom4, st_length(the_geom), area, n, slope*100, false FROM v_edit_arc a
+	SELECT arc_id, arccat_id, shape, geom1, geom2, geom3, geom4, st_length(the_geom), area, n, slope, false FROM v_edit_arc_slope4dec a
 		LEFT JOIN cat_arc ON arccat_id = id 
 		LEFT JOIN cat_arc_shape s ON shape=s.id 
 		LEFT JOIN cat_mat_arc m ON a.matcat_id = m.id;
@@ -45,8 +45,8 @@ BEGIN
 	UPDATE anl_drained_flows_arc d SET area = (geom1/2)*(geom1/2)*pi() WHERE epa_shape = 'CIRCULAR'; -- {{hr =0.5*(geom1/2)}}
 	UPDATE anl_drained_flows_arc d SET full_rh = 0.5*geom1/2 WHERE epa_shape = 'CIRCULAR'; -- {{hr =0.5*(geom1/2)}}
 
-	UPDATE anl_drained_flows_arc d SET area = geom1*geom2 WHERE epa_shape IN ('RECT_OPEN' , 'RECT_CLOSED', 'MODBASKETHANDLE'); -- {{area = geom1*geom2}}
-	UPDATE anl_drained_flows_arc d SET full_rh = geom1*geom2/(geom1*2 + geom2*2) WHERE epa_shape IN ('RECT_OPEN' , 'RECT_CLOSED', 'MODBASKETHANDLE');  --{{hr = geom1*geom2/(geom1*2+geom*2}}
+	UPDATE anl_drained_flows_arc d SET area = geom1*geom2 WHERE epa_shape IN ('RECT_OBERT' , 'RECTANGULAR', 'MODBASKETHANDLE'); -- {{area = geom1*geom2}}
+	UPDATE anl_drained_flows_arc d SET full_rh = geom1*geom2/(geom1*2 + geom2*2) WHERE epa_shape IN ('RECT_OBERT' , 'RECTANGULAR', 'MODBASKETHANDLE');  --{{hr = geom1*geom2/(geom1*2+geom*2}}
 
 	UPDATE anl_drained_flows_arc d SET area = 4.594*((geom1/3)*(geom1/3)) WHERE epa_shape = 'OVOIDE'; -- 
 	UPDATE anl_drained_flows_arc d SET full_rh = 0.579*(geom1/3) WHERE epa_shape = 'OVOIDE'; -- 
@@ -208,7 +208,7 @@ BEGIN
 	AND d.arc_id = a.arc_id;
 
 	-- not cero slopes
-	UPDATE anl_drained_flows_arc SET slope = 0.001 WHERE slope < 0.001;
+	UPDATE anl_drained_flows_arc SET slope = 0.002 WHERE slope = 0;
 
 	-- not null manning
 	UPDATE anl_drained_flows_arc d SET material_estimated = true, manning = 0.014 WHERE manning IS NULL;
@@ -216,22 +216,22 @@ BEGIN
 	--END SECTION OF ESTIMATED DATA
 	-------------------------------
 	
-	-- update anl_drained_arc, full_flow values for conduits according manning's formula
+	-- update anl_drained_arc, fflow values for conduits according manning's formula
 	------------------------------------------------------------------------------------
-	UPDATE anl_drained_flows_arc d SET fflow = (1/manning)*((full_rh)^(0.666667))*(slope^(0.5))*area where slope > 0;
+	UPDATE anl_drained_flows_arc d SET fflow = (1/manning)*((full_rh)^(0.666667))*((slope/100)^(0.5))*area where slope > 0;
 	UPDATE anl_drained_flows_arc d SET fflow = (1/manning)*((full_rh)^(0.666667))*((0.00001)^(0.5))*area where slope < 0;
 
 
-	-- update anl_drained_arc, full_flow values for force main conduits (according pump station)
+	-- update anl_drained_arc, fflow values for force main conduits (according pump station)
 	--------------------------------------------------------------------------------------------
 	UPDATE anl_drained_flows_arc d SET fflow = 0.2 WHERE epa_shape = 'FORCE_MAIN' AND arc_id::integer IN (245);
 
 
-	-- re-update anl_drained_arc, full_flow values ONLY for VIRTUAL ARCS (using full_flow from downstream arc)
+	-- re-update anl_drained_arc, fflow values ONLY for VIRTUAL ARCS (using fflow from downstream arc)
 	----------------------------------------------------------------------------------------------------------
 	UPDATE anl_drained_flows_arc f SET fflow = a.fflow FROM (
-		SELECT a1.arc_id, fflow FROM v_edit_arc a1 	
-		JOIN v_edit_arc a2 ON a1.node_2 = a2.node_1 
+		SELECT a1.arc_id, fflow FROM v_edit_arc_slope4dec a1 	
+		JOIN v_edit_arc_slope4dec a2 ON a1.node_2 = a2.node_1 
 		JOIN anl_drained_flows_arc d ON a2.arc_id = d.arc_id
 		JOIN cat_feature_arc f1 ON f1.id = a1.arc_type
 		JOIN cat_feature_arc f2 ON f2.id = a2.arc_type

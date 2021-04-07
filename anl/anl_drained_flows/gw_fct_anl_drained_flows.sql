@@ -82,7 +82,6 @@ SELECT * FROM anl_drained_flows_node ORDER BY node_flooding desc;
 SELECT * FROM anl_drained_flows_result_arc ORDER BY arc_id;
 SELECT * FROM anl_drained_flows_result_node ORDER BY arc_id;
 
-UPDATE ud.anl_drained_flows_node set node_area = 1, imperv = 50
 
 */
 
@@ -109,7 +108,7 @@ v_result text;
 v_result_info json;
 v_result_line json;
 v_returnarc boolean = false;
-v_hydrologyscenario integer;
+v_hydrologyScenario integer;
 
 BEGIN
 
@@ -123,10 +122,10 @@ BEGIN
 	v_intensity := ((p_data ->>'data')::json->>'parameters')::json->>'intensity';
 	v_result_id:= ((p_data ->>'data')::json->>'parameters')::json->>'resultId';
 	v_returnarc:= ((p_data ->>'data')::json->>'parameters')::json->>'returnArcLayer';
-	v_hydrologyscenario:= ((p_data ->>'data')::json->>'parameters')::json->>'hydrologyScenario';
+	v_hydrologyScenario:= ((p_data ->>'data')::json->>'parameters')::json->>'hydrologyScenario';
 
 	-- reset data
-	PERFORM gw_fct_anl_drained_flows_data('{"data":"test"}'::json);
+	PERFORM ud.gw_fct_anl_drained_flows_data('{"data":"test"}'::json);
 
 	-- reset storage tables
 	DELETE FROM anl_arc WHERE result_id = v_result_id AND fid = v_fid;
@@ -137,12 +136,17 @@ BEGIN
 	DELETE FROM selector_drained_flows WHERE cur_user = current_user;
 	INSERT INTO selector_drained_flows VALUES (v_result_id, current_user);
 
+	-- save psector selector
+	DELETE FROM temp_table WHERE fid=287 AND cur_user=current_user;
+	INSERT INTO temp_table (fid, text_column)  
+	SELECT 287, (array_agg(psector_id)) FROM selector_psector WHERE cur_user=current_user;
+
 	-- upsert anl_drained_flows_result_cat
 	INSERT INTO anl_drained_flows_result_cat VALUES (v_result_id, current_user) ON CONFLICT (result_id) DO NOTHING;
 
 	-- reset hydrology scenario selector
 	DELETE FROM selector_inp_hydrology WHERE cur_user = current_user;
-	INSERT INTO selector_inp_hydrology VALUES (v_hydrologyscenario, current_user);
+	INSERT INTO selector_inp_hydrology VALUES (v_hydrologyScenario, current_user);
 
 	-- update algoritm tables
 	UPDATE anl_drained_flows_node SET 
@@ -156,21 +160,17 @@ BEGIN
 		runoff_flow = 0,
 		real_flow = 0;
 
-	IF v_hydrologyscenario > 0 THEN
-
-		-- update using hidrology scenario
-		UPDATE anl_drained_flows_node n SET node_area = area, imperv = a.imperv FROM 
-		(SELECT node_id, 
-		CASE WHEN sum(area)::numeric(12,4) is null then 0 else sum(area)::numeric(12,4) END as area, 
-		CASE WHEN (sum(area*imperv)/sum(area))::numeric(12,4) IS NULL THEN 0 ELSE (sum(area*imperv)/sum(area))::numeric(12,4) END as imperv, 
-		false, 
-		0 
-		FROM v_edit_node n
-		LEFT JOIN v_edit_inp_subcatchment ON outlet_id = node_id
-		GROUP BY node_id)a
-		WHERE n.node_id = a.node_id;
-		
-	END IF;
+	-- update using hidrology scenario
+	UPDATE anl_drained_flows_node n SET node_area = area, imperv = a.imperv FROM 
+	(SELECT node_id, 
+	CASE WHEN sum(area)::numeric(12,4) is null then 0 else sum(area)::numeric(12,4) END as area, 
+	CASE WHEN (sum(area*imperv)/sum(area))::numeric(12,4) IS NULL THEN 0 ELSE (sum(area*imperv)/sum(area))::numeric(12,4) END as imperv, 
+	false, 
+	0 
+	FROM v_edit_node n
+	LEFT JOIN v_edit_inp_subcatchment ON outlet_id = node_id
+	GROUP BY node_id)a
+	WHERE n.node_id = a.node_id;
 
 	UPDATE anl_drained_flows_arc SET 
 		drained_area = 0, 
