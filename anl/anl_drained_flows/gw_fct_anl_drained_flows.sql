@@ -137,11 +137,6 @@ BEGIN
 	DELETE FROM selector_drained_flows WHERE cur_user = current_user;
 	INSERT INTO selector_drained_flows VALUES (v_result_id, current_user);
 
-	-- save psector selector
-	DELETE FROM temp_table WHERE fid=287 AND cur_user=current_user;
-	INSERT INTO temp_table (fid, text_column)  
-	SELECT 287, (array_agg(psector_id)) FROM selector_psector WHERE cur_user=current_user;
-
 	-- upsert anl_drained_flows_result_cat
 	INSERT INTO anl_drained_flows_result_cat VALUES (v_result_id, current_user) ON CONFLICT (result_id) DO NOTHING;
 

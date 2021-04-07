@@ -5,7 +5,7 @@ This version of Giswater is provided by Giswater Association
 */
 
 
-SET search_path = 'SCHEMA_NAME', public;
+SET search_path = 'ud', public;
 
 
 -- fprocess

@@ -224,7 +224,7 @@ BEGIN
 
 	-- update anl_drained_arc, full_flow values for force main conduits (according pump station)
 	--------------------------------------------------------------------------------------------
-	UPDATE anl_drained_flows_arc d SET full_flow = 0.2 WHERE epa_shape = 'FORCE_MAIN' AND arc_id::integer IN (245);
+	UPDATE anl_drained_flows_arc d SET fflow = 0.2 WHERE epa_shape = 'FORCE_MAIN' AND arc_id::integer IN (245);
 
 
 	-- re-update anl_drained_arc, full_flow values ONLY for VIRTUAL ARCS (using full_flow from downstream arc)
